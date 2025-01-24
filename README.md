@@ -30,7 +30,7 @@ Returns a `Promise` that resolves with array of message objects. Each message ha
 | `'4'` | Draft sms           |
 
 Example of `message` object
-```json
+```js
 {
   id: '148',
   number: '+386123456789',
@@ -77,7 +77,7 @@ Returns a `Promise` that resolves if SMS messages were successfully deleted.
 Returns a `Promise` that resolves with a modem SMS capacity info object.
 
 Example:
-```json
+```js
 {
   sms_nv_total: '100',
   sms_sim_total: '20',
