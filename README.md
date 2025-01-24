@@ -17,7 +17,7 @@ new Modem({ modemIP: 'IP', modemPassword: 'password'});
 
 ## Methods
 
-#### `getAllSms()`
+- #### `getAllSms()`
 Retrieves all SMS messages from modem. This array includes sent, received, unread, draft and failed messages.
 Returns a `Promise` that resolves with array of message objects. Each message has a `tag` property by which you can check message type: 
 
@@ -45,35 +45,35 @@ Example of `message` object
 }
 ```
 
-#### `sendSms(number, message)`
+- #### `sendSms(number, message)`
 `number [string]` - phone number of the sms recipient
 `message [string]` - sms message
 
 Sends the SMS to a given number.
 Returns a `Promise` that resolves if SMS was sent and is rejected otherwise.
 
-#### `setSmsAsRead(smsIds)`
+- #### `setSmsAsRead(smsIds)`
 `smsIds [Array<String>]` - array of sms IDs you want to mark as read. 
 
 Sets the status of the received SMS with given id to read.
 Have in mind that you can only mark SMS as read if it has a `tag` of `1` that then becomes `0`.
 Returns a `Promise` that resolves if SMS messages were successfully marked as read.
 
-#### `setAllSmsAsRead()`
+- #### `setAllSmsAsRead()`
 Sets the status of all unread SMS messages to read. (tag from `1` to `0`)
 Returns a `Promise` that resolves if SMS messages were successfully marked as read.
 
-#### `deleteSms(smsIds)`
+- #### `deleteSms(smsIds)`
 `smsIds [Array<String>]` - array of sms IDs you want to delete from the modem. 
 
 Deletes the SMS messages of given ids from zte modem.
 Returns a `Promise` that resolves if SMS messages were successfully deleted.
 
-#### `deleteAllSms()`
+- #### `deleteAllSms()`
 Deletes ALL SMS messages from ZTE modem regardless of the tag ('received', 'sent', 'unread', 'failed', 'drafts').
 Returns a `Promise` that resolves if SMS messages were successfully deleted.
 
-#### `getSmsCapacityInfo()`
+- #### `getSmsCapacityInfo()`
 Returns a `Promise` that resolves with a modem SMS capacity info object.
 
 Example:
