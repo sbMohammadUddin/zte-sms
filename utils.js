@@ -18,6 +18,45 @@ function dec2hex(e) {
   return (e + 0).toString(16).toUpperCase()
 }
 
+function hex2char(e) {
+  let t = '';
+  let n = parseInt(e, 16);
+  return n <= 65535 ? t += String.fromCharCode(n) : n <= 1114111 && (n -= 65536,
+    t += String.fromCharCode(55296 | n >> 10) + String.fromCharCode(56320 | 1023 & n)),
+    t
+}
+
+function leftInsert(e, t, n) {
+  for (var o = e.toString().length; o < t; o++)
+    e = n + e;
+  return e
+}
+
+function transTime(e, t, n) {
+  var o = e.split(",");
+  if (0 == o.length || -1 != ("," + e + ",").indexOf(",,"))
+    return "";
+  var r;
+  r = "1" == t ? o[2] + "/" + o[1] + "/" + o[0] + " " : "2" == t ? o[1] + "/" + o[2] + "/" + o[0] + " " : o[0] + "/" + o[1] + "/" + o[2] + " ";
+  var i;
+  if ("12" == n) {
+    var a = trans12hourTime(leftInsert(o[3], 2, "0"));
+    i = a[0] + ":" + leftInsert(o[4], 2, "0") + ":" + leftInsert(o[5], 2, "0") + " " + a[1]
+  } else
+    i = leftInsert(o[3], 2, "0") + ":" + leftInsert(o[4], 2, "0") + ":" + leftInsert(o[5], 2, "0");
+  return r + i
+}
+function trans12hourTime(e) {
+  var t, n;
+  return e = parseInt(e),
+    e > 12 ? (t = "PM",
+      n = e - 12) : 12 == e ? (t = "PM",
+        n = 12) : 0 == e ? (t = "AM",
+          n = 12) : (t = "AM",
+            n = e),
+    [n, t]
+}
+
 function encodeMessage(e) {
   let t = 0
     , n = "";
@@ -45,7 +84,17 @@ function encodeMessage(e) {
   return n
 }
 
+function decodeMessage(e, t) {
+  if (!e) { return ''; }
+  const specialCharsIgnoreWrap = ["0009", "0000"];
+  return e.replace(/([A-Fa-f0-9]{1,4})/g, function (e, t) {
+    return -1 === specialCharsIgnoreWrap.indexOf(t) ? hex2char(t) : "";
+  })
+}
+
 module.exports = {
   getCurrentTimeString,
   encodeMessage,
+  decodeMessage,
+  transTime,
 }
