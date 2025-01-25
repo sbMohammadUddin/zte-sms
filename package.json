@@ -1,6 +1,6 @@
 {
   "name": "@zigasebenik/zte-sms",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A node library to send sms messages using ZTE MF79U modem.",
   "main": "modem.js",
   "author": "Žiga Šebenik",
