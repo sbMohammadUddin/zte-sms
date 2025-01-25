@@ -23,11 +23,11 @@ Returns a `Promise` that resolves with array of message objects. Each message ha
 
 | tag   | meaning             |
 | ----- | ------------------- |
-| `'0'` | Received sms        |
-| `'1'` | Unread received sms |
-| `'2'` | Sent sms            |
-| `'3'` | Failed sent sms     |
-| `'4'` | Draft sms           |
+| `'0'` | Received SMS        |
+| `'1'` | Unread received SMS |
+| `'2'` | Sent SMS            |
+| `'3'` | Failed sent SMS
+| `'4'` | Draft SMS           |
 
 Example of `message` object
 ```js
@@ -46,14 +46,14 @@ Example of `message` object
 ```
 
 - #### `sendSms(number, message)`
-`number [string]` - phone number of the sms recipient
-`message [string]` - sms message
+`number [string]` - phone number of the SMS recipient
+`message [string]` - SMS message
 
 Sends the SMS to a given number.
-Returns a `Promise` that resolves if SMS was sent and is rejected otherwise.
+Returns a `Promise` that resolves with sent SMS message object if SMS was sent and is rejected otherwise.
 
 - #### `setSmsAsRead(smsIds)`
-`smsIds [Array<String>]` - array of sms IDs you want to mark as read. 
+`smsIds [Array<String>]` - array of SMS IDs you want to mark as read. 
 
 Sets the status of the received SMS with given id to read.
 Have in mind that you can only mark SMS as read if it has a `tag` of `1` that then becomes `0`.
@@ -64,7 +64,7 @@ Sets the status of all unread SMS messages to read. (tag from `1` to `0`)
 Returns a `Promise` that resolves if SMS messages were successfully marked as read.
 
 - #### `deleteSms(smsIds)`
-`smsIds [Array<String>]` - array of sms IDs you want to delete from the modem. 
+`smsIds [Array<String>]` - array of SMS IDs you want to delete from the modem. 
 
 Deletes the SMS messages of given ids from zte modem.
 Returns a `Promise` that resolves if SMS messages were successfully deleted.
@@ -101,11 +101,6 @@ const myModem = new Modem({ modemIP: '192.168.0.1', modemPassword: 'password'});
 (async () => {
   try {
     await myModem.sendSms('000000000', 'My message');
-    // Add some timeout if you want that above sent message
-    // is included in immediate next call to retrieve all messages.
-    // Although ZTE modem returns a response that action was completed,
-    // it does not refresh it's internal state right away.
-    await setTimeout(500);
     const allSMSMessages = await myModem.getAllSms();
     console.log(allSMSMessages);
   } catch (err) {

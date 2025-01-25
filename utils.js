@@ -92,9 +92,26 @@ function decodeMessage(e, t) {
   })
 }
 
+function promiseRetry(fn, { retries = 20, interval = 200 } = {}) {
+  return new Promise((resolve, reject) =>
+    fn()
+      .then(resolve)
+      .catch((error) => {
+        if (retries === 0) {
+          return reject(error);
+        }
+        setTimeout(() => {
+          promiseRetry(fn, { retries: retries - 1, interval })
+            .then(resolve, reject);
+        }, interval);
+      }),
+  );
+}
+
 module.exports = {
   getCurrentTimeString,
   encodeMessage,
   decodeMessage,
   transTime,
+  promiseRetry,
 }

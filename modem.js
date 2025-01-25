@@ -1,4 +1,3 @@
-const { setTimeout } = require("timers/promises");
 const merge = require('lodash.merge');
 const http = require('http');
 const qs = require('qs');
@@ -7,7 +6,8 @@ const {
   getCurrentTimeString,
   encodeMessage,
   decodeMessage,
-  transTime
+  transTime,
+  promiseRetry,
 } = require('./utils');
 
 class Modem {
@@ -124,6 +124,29 @@ class Modem {
     return response.data.RD;
   }
 
+  async #getCmdStatusInfo(sms_cmd) {
+    const data = {
+      isTest: false,
+      cmd: 'sms_cmd_status_info',
+      sms_cmd,
+    };
+    const options = {
+      method: 'GET',
+      headers: { Cookie: this.loginCookieValue },
+    };
+    const response = await this.#request(options, data);
+    return response.data;
+  }
+
+  async #awaitConfirmation(sms_cmd) {
+    await promiseRetry(async () => {
+      const info = await this.#getCmdStatusInfo(sms_cmd);
+      return (!info?.sms_cmd_status_result || info.sms_cmd_status_result === '1')
+        ? Promise.reject()
+        : Promise.resolve();
+    });
+  }
+
   async getSmsCapacityInfo() {
     await this.#login();
     const data = {
@@ -178,12 +201,12 @@ class Modem {
       headers: { Cookie: this.loginCookieValue },
     };
     const response = await this.#request(options, data);
+    await this.#awaitConfirmation(6);
     await this.#logout();
     if (response.data.result !== 'success') {
       throw new Error('Error deleting SMS.');
     }
   }
-
 
   // sms tags
   // 1	Unread received message.
@@ -214,11 +237,11 @@ class Modem {
       headers: { Cookie: this.loginCookieValue },
     };
     const response = await this.#request(options, data);
-    await this.#logout();
-    await setTimeout(300);
     if (response.data.result !== 'success') {
       throw new Error('Error marking SMS as read.');
     }
+    await this.#awaitConfirmation(5);
+    await this.#logout();
   }
 
   async setAllSmsAsRead() {
@@ -230,12 +253,14 @@ class Modem {
 
   async sendSms(number, message) {
     await this.#login();
+    const sms_time = getCurrentTimeString();
+    const sms_time_compare = transTime(sms_time.replaceAll(';', ','), '3', '24');
     const data = {
       isTest: false,
       goformId: 'SEND_SMS',
       notCallback: true,
       Number: number.toString(),
-      sms_time: getCurrentTimeString(),
+      sms_time,
       MessageBody: encodeMessage(message),
       ID: -1,
       encode_type: 'UNICODE',
@@ -246,10 +271,19 @@ class Modem {
       headers: { Cookie: this.loginCookieValue },
     };
     const response = await this.#request(options, data);
-    await this.#logout();
     if (response.data.result !== 'success') {
       throw new Error('Error sending sending SMS.');
     }
+    await this.#awaitConfirmation(4);
+    let messages = await this.getAllSms();
+    message = messages.filter((m) => 
+      m.tag === '2' &&
+      m.number === number &&
+      m.content === message &&
+      sms_time_compare === m.date
+    );
+    await this.#logout();
+    return message;
   }
 }
 
