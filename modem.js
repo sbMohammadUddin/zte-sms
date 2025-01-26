@@ -54,7 +54,7 @@ class Modem {
           reject(error);
         });
       });
-      request.on('error', (error) => { throw new Error(error); });
+      request.on('error', (error) => { reject(error); });
       data && request.write(data);
       request.end();
     });
@@ -272,7 +272,7 @@ class Modem {
     };
     const response = await this.#request(options, data);
     if (response.data.result !== 'success') {
-      throw new Error('Error sending sending SMS.');
+      throw new Error('Error sending SMS.');
     }
     await this.#awaitConfirmation(4);
     let messages = await this.getAllSms();
