@@ -69,7 +69,7 @@ class Modem {
     const options = { method: 'POST' };
     const response = await this.#request(options, data);
     if (response.data.result !== '0') {
-      throw new Error('Logion to modem failed.');
+      throw new Error('Login to modem failed.');
     }
     this.loginCookieValue = response.response.headers['set-cookie'][0].split(';')[0];
   }
