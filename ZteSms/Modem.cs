@@ -1,4 +1,4 @@
-namespace ZteSms.Net;
+namespace ZteSms;
 
 using System;
 using System.Net.Http;
@@ -292,7 +292,7 @@ public class Modem
         var sb = new StringBuilder();
         foreach (var codepoint in message.EnumerateRunes())
         {
-            var hex = ((int)codepoint.Value).ToString("X");
+            var hex = codepoint.Value.ToString("X");
             sb.Append(hex.PadLeft(4, '0'));
         }
         return sb.ToString();
