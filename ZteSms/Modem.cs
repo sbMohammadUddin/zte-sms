@@ -3,7 +3,6 @@ namespace ZteSms;
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -52,8 +51,8 @@ public class Modem
             ["password"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(_modemPassword))
         };
         var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        if (!json.RootElement.TryGetProperty("result", out var result) || result.GetString() != "0")
+        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        if (json?.result != "0")
             throw new Exception("Login to modem failed.");
         if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
             _loginCookie = cookies.First().Split(';')[0];
@@ -82,9 +81,9 @@ public class Modem
             ["multi_data"] = "1"
         };
         var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        string crStr = json.RootElement.TryGetProperty("cr_version", out var cr) ? cr.GetString() : string.Empty;
-        string waStr = json.RootElement.TryGetProperty("wa_inner_version", out var wa) ? wa.GetString() : string.Empty;
+        var json = JsonSerializer.Deserialize<VersionResponse>(await response.Content.ReadAsStringAsync());
+        string crStr = json?.cr_version ?? string.Empty;
+        string waStr = json?.wa_inner_version ?? string.Empty;
         if (!string.IsNullOrEmpty(crStr) || !string.IsNullOrEmpty(waStr))
         {
             _modemVersion = $"{crStr}{waStr}";
@@ -111,10 +110,10 @@ public class Modem
             ["cmd"] = "RD"
         };
         var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        if (!json.RootElement.TryGetProperty("RD", out var rd))
+        var json = JsonSerializer.Deserialize<RdResponse>(await response.Content.ReadAsStringAsync());
+        if (string.IsNullOrEmpty(json?.RD))
             throw new Exception("Getting RD failed.");
-        return rd.GetString();
+        return json.RD;
     }
 
     private async Task<string> GetADAsync()
@@ -129,14 +128,14 @@ public class Modem
         for (int i = 0; i < 20; i++)
         {
             var info = await GetCmdStatusInfoAsync(cmd);
-            if (info.TryGetProperty("sms_cmd_status_result", out var status) && status.GetString() != "0")
+            if (!string.IsNullOrEmpty(info?.sms_cmd_status_result) && info.sms_cmd_status_result != "0")
                 return;
             await Task.Delay(200);
         }
         throw new Exception("Command confirmation timeout.");
     }
 
-    private async Task<JsonElement> GetCmdStatusInfoAsync(int cmd)
+    private async Task<CmdStatusInfo?> GetCmdStatusInfoAsync(int cmd)
     {
         var data = new Dictionary<string, string>
         {
@@ -145,11 +144,10 @@ public class Modem
             ["sms_cmd"] = cmd.ToString()
         };
         var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return json.RootElement.Clone();
+        return JsonSerializer.Deserialize<CmdStatusInfo>(await response.Content.ReadAsStringAsync());
     }
 
-    public async Task<JsonElement> GetSmsCapacityInfoAsync()
+    public async Task<SmsCapacityInfo?> GetSmsCapacityInfoAsync()
     {
         await LoginAsync();
         var data = new Dictionary<string, string>
@@ -159,11 +157,10 @@ public class Modem
         };
         var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
         await LogoutAsync();
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return json.RootElement.Clone();
+        return JsonSerializer.Deserialize<SmsCapacityInfo>(await response.Content.ReadAsStringAsync());
     }
 
-    public async Task<List<JsonElement>> GetAllSmsAsync()
+    public async Task<List<Message>> GetAllSmsAsync()
     {
         await LoginAsync();
         var data = new Dictionary<string, string>
@@ -178,14 +175,8 @@ public class Modem
         };
         var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
         await LogoutAsync();
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var list = new List<JsonElement>();
-        if (json.RootElement.TryGetProperty("messages", out var messages))
-        {
-            foreach (var msg in messages.EnumerateArray())
-                list.Add(msg.Clone());
-        }
-        return list;
+        var json = JsonSerializer.Deserialize<AllSmsResponse>(await response.Content.ReadAsStringAsync());
+        return json?.messages ?? new List<Message>();
     }
 
     public async Task DeleteSmsAsync(IEnumerable<string> ids)
@@ -202,19 +193,19 @@ public class Modem
         var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
         await AwaitConfirmationAsync(6);
         await LogoutAsync();
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        if (!json.RootElement.TryGetProperty("result", out var result) || result.GetString() != "success")
+        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        if (json?.result != "success")
             throw new Exception("Error deleting SMS.");
     }
 
-    public async Task DeleteAllSmsAsync(string tag = "")
+    public async Task DeleteAllSmsAsync(MessageTag? tag = null)
     {
         var messages = await GetAllSmsAsync();
         var ids = new List<string>();
         foreach (var msg in messages)
         {
-            if (string.IsNullOrEmpty(tag) || msg.GetProperty("tag").GetString() == tag)
-                ids.Add(msg.GetProperty("id").GetString());
+            if (tag is null || msg.Tag == tag)
+                ids.Add(msg.id);
         }
         await DeleteSmsAsync(ids);
     }
@@ -231,8 +222,8 @@ public class Modem
             ["AD"] = await GetADAsync()
         };
         var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        if (!json.RootElement.TryGetProperty("result", out var result) || result.GetString() != "success")
+        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        if (json?.result != "success")
             throw new Exception("Error marking SMS as read.");
         await AwaitConfirmationAsync(5);
         await LogoutAsync();
@@ -244,13 +235,13 @@ public class Modem
         var ids = new List<string>();
         foreach (var msg in messages)
         {
-            if (msg.GetProperty("tag").GetString() == "1")
-                ids.Add(msg.GetProperty("id").GetString());
+            if (msg.Tag == MessageTag.UnreadReceived)
+                ids.Add(msg.id);
         }
         await SetSmsAsReadAsync(ids);
     }
 
-    public async Task<JsonElement> SendSmsAsync(string number, string message)
+    public async Task<Message> SendSmsAsync(string number, string message)
     {
         await LoginAsync();
         var smsTime = DateTime.UtcNow.ToString("yy;MM;dd;HH;mm;ss;+0");
@@ -267,16 +258,16 @@ public class Modem
             ["AD"] = await GetADAsync()
         };
         var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        if (!json.RootElement.TryGetProperty("result", out var result) || result.GetString() != "success")
+        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        if (json?.result != "success")
             throw new Exception("Error sending SMS.");
         await AwaitConfirmationAsync(4);
         var messages = await GetAllSmsAsync();
         foreach (var msg in messages)
         {
-            if (msg.GetProperty("tag").GetString() == "2" &&
-                msg.GetProperty("number").GetString() == number &&
-                msg.GetProperty("content").GetString() == message)
+            if (msg.Tag == MessageTag.Sent &&
+                msg.number == number &&
+                msg.content == message)
             {
                 await LogoutAsync();
                 return msg;
