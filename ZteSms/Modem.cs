@@ -25,8 +25,8 @@ public class Modem
 
     private async Task<HttpResponseMessage> RequestAsync(HttpMethod method, string path, Dictionary<string, string> data)
     {
-        var content = new FormUrlEncodedContent(data ?? new());
-        var request = new HttpRequestMessage(method, path);
+        FormUrlEncodedContent content = new(data ?? new());
+        HttpRequestMessage request = new(method, path);
         if (method == HttpMethod.Get && data is not null)
         {
             request.RequestUri = new Uri($"http://{_modemIP}{path}?{await content.ReadAsStringAsync()}");
@@ -42,27 +42,32 @@ public class Modem
         return await _httpClient.SendAsync(request);
     }
 
-    private async Task LoginAsync()
+    private async Task LoginAsync(bool isTest = false)
     {
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["goformId"] = "LOGIN",
             ["password"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(_modemPassword))
         };
-        var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
+        ResultResponse? json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
         if (json?.result != "0")
+        {
             throw new Exception("Login to modem failed.");
-        if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+        }
+
+        if (response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? cookies))
+        {
             _loginCookie = cookies.First().Split(';')[0];
+        }
     }
 
-    private async Task LogoutAsync()
+    private async Task LogoutAsync(bool isTest = false)
     {
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["goformId"] = "LOGOUT",
             ["AD"] = await GetADAsync()
         };
@@ -70,18 +75,21 @@ public class Modem
         _loginCookie = string.Empty;
     }
 
-    private async Task<string> GetModemVersionAsync()
+    private async Task<string> GetModemVersionAsync(bool isTest = false)
     {
         if (!string.IsNullOrEmpty(_modemVersion))
-            return _modemVersion;
-        var data = new Dictionary<string, string>
         {
-            ["isTest"] = "false",
+            return _modemVersion;
+        }
+
+        Dictionary<string, string> data = new()
+        {
+            ["isTest"] = isTest.ToString(),
             ["cmd"] = "cr_version,wa_inner_version",
             ["multi_data"] = "1"
         };
-        var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
-        var json = JsonSerializer.Deserialize<VersionResponse>(await response.Content.ReadAsStringAsync());
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
+        VersionResponse? json = JsonSerializer.Deserialize<VersionResponse>(await response.Content.ReadAsStringAsync());
         string crStr = json?.cr_version ?? string.Empty;
         string waStr = json?.wa_inner_version ?? string.Empty;
         if (!string.IsNullOrEmpty(crStr) || !string.IsNullOrEmpty(waStr))
@@ -94,32 +102,37 @@ public class Modem
 
     private static string HexMD5(string input)
     {
-        using var md5 = System.Security.Cryptography.MD5.Create();
-        var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
-        var sb = new StringBuilder();
-        foreach (var b in bytes)
+        byte[] bytes = System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(input));
+        StringBuilder sb = new();
+        foreach (byte b in bytes)
+        {
             sb.Append(b.ToString("x2"));
+        }
+
         return sb.ToString();
     }
 
-    private async Task<string> GetRDAsync()
+    private async Task<string> GetRDAsync(bool isTest = false)
     {
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["cmd"] = "RD"
         };
-        var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
-        var json = JsonSerializer.Deserialize<RdResponse>(await response.Content.ReadAsStringAsync());
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
+        RdResponse? json = JsonSerializer.Deserialize<RdResponse>(await response.Content.ReadAsStringAsync());
         if (string.IsNullOrEmpty(json?.RD))
+        {
             throw new Exception("Getting RD failed.");
+        }
+
         return json.RD;
     }
 
     private async Task<string> GetADAsync()
     {
-        var version = await GetModemVersionAsync();
-        var rd = await GetRDAsync();
+        string version = await GetModemVersionAsync();
+        string rd = await GetRDAsync();
         return HexMD5(HexMD5(version) + rd);
     }
 
@@ -127,45 +140,48 @@ public class Modem
     {
         for (int i = 0; i < 20; i++)
         {
-            var info = await GetCmdStatusInfoAsync(cmd);
+            CmdStatusInfo? info = await GetCmdStatusInfoAsync(cmd);
             if (!string.IsNullOrEmpty(info?.sms_cmd_status_result) && info.sms_cmd_status_result != "0")
+            {
                 return;
+            }
+
             await Task.Delay(200);
         }
         throw new Exception("Command confirmation timeout.");
     }
 
-    private async Task<CmdStatusInfo?> GetCmdStatusInfoAsync(int cmd)
+    private async Task<CmdStatusInfo?> GetCmdStatusInfoAsync(int cmd, bool isTest = false)
     {
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["cmd"] = "sms_cmd_status_info",
             ["sms_cmd"] = cmd.ToString()
         };
-        var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
         return JsonSerializer.Deserialize<CmdStatusInfo>(await response.Content.ReadAsStringAsync());
     }
 
-    public async Task<SmsCapacityInfo?> GetSmsCapacityInfoAsync()
+    public async Task<SmsCapacityInfo?> GetSmsCapacityInfoAsync(bool isTest = false)
     {
         await LoginAsync();
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["cmd"] = "sms_capacity_info"
         };
-        var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
         await LogoutAsync();
         return JsonSerializer.Deserialize<SmsCapacityInfo>(await response.Content.ReadAsStringAsync());
     }
 
-    public async Task<List<Message>> GetAllSmsAsync()
+    public async Task<List<Message>> GetAllSmsAsync(bool isTest = false)
     {
         await LoginAsync();
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["cmd"] = "sms_data_total",
             ["page"] = "0",
             ["data_per_page"] = "5000",
@@ -173,81 +189,90 @@ public class Modem
             ["tags"] = "10",
             ["order_by"] = "order by id desc"
         };
-        var response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Get, "/goform/goform_get_cmd_process", data);
         await LogoutAsync();
-        var json = JsonSerializer.Deserialize<AllSmsResponse>(await response.Content.ReadAsStringAsync());
+        AllSmsResponse? json = JsonSerializer.Deserialize<AllSmsResponse>(await response.Content.ReadAsStringAsync());
         return json?.messages ?? new List<Message>();
     }
 
-    public async Task DeleteSmsAsync(IEnumerable<string> ids)
+    public async Task DeleteSmsAsync(IEnumerable<string> ids, bool isTest = false)
     {
         await LoginAsync();
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["goformId"] = "DELETE_SMS",
             ["msg_id"] = string.Join(';', ids) + ";",
             ["notCallback"] = "true",
             ["AD"] = await GetADAsync()
         };
-        var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
         await AwaitConfirmationAsync(6);
         await LogoutAsync();
-        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        ResultResponse? json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
         if (json?.result != "success")
+        {
             throw new Exception("Error deleting SMS.");
+        }
     }
 
     public async Task DeleteAllSmsAsync(MessageTag? tag = null)
     {
-        var messages = await GetAllSmsAsync();
-        var ids = new List<string>();
-        foreach (var msg in messages)
+        List<Message> messages = await GetAllSmsAsync();
+        List<string> ids = new();
+        foreach (Message msg in messages)
         {
             if (tag is null || msg.Tag == tag)
+            {
                 ids.Add(msg.id);
+            }
         }
         await DeleteSmsAsync(ids);
     }
 
-    public async Task SetSmsAsReadAsync(IEnumerable<string> ids)
+    public async Task SetSmsAsReadAsync(IEnumerable<string> ids, bool isTest = false)
     {
         await LoginAsync();
-        var data = new Dictionary<string, string>
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["goformId"] = "SET_MSG_READ",
             ["msg_id"] = string.Join(';', ids) + ";",
-            ["tag"] = "0",
+            ["tag"] = MessageTag.Received.ToString(),
             ["AD"] = await GetADAsync()
         };
-        var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
+        ResultResponse? json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
         if (json?.result != "success")
+        {
             throw new Exception("Error marking SMS as read.");
+        }
+
         await AwaitConfirmationAsync(5);
         await LogoutAsync();
     }
 
     public async Task SetAllSmsAsReadAsync()
     {
-        var messages = await GetAllSmsAsync();
-        var ids = new List<string>();
-        foreach (var msg in messages)
+        List<Message> messages = await GetAllSmsAsync();
+        List<string> ids = new();
+        foreach (Message msg in messages)
         {
             if (msg.Tag == MessageTag.UnreadReceived)
+            {
                 ids.Add(msg.id);
+            }
         }
         await SetSmsAsReadAsync(ids);
     }
 
-    public async Task<Message> SendSmsAsync(string number, string message)
+    public async Task<Message> SendSmsAsync(string number, string message, bool isTest = false)
     {
         await LoginAsync();
-        var smsTime = DateTime.UtcNow.ToString("yy;MM;dd;HH;mm;ss;+0");
-        var data = new Dictionary<string, string>
+        string smsTime = DateTime.UtcNow.ToString("yy;MM;dd;HH;mm;ss;+0");
+        Dictionary<string, string> data = new()
         {
-            ["isTest"] = "false",
+            ["isTest"] = isTest.ToString(),
             ["goformId"] = "SEND_SMS",
             ["notCallback"] = "true",
             ["Number"] = number,
@@ -257,13 +282,16 @@ public class Modem
             ["encode_type"] = "UNICODE",
             ["AD"] = await GetADAsync()
         };
-        var response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
-        var json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
+        HttpResponseMessage response = await RequestAsync(HttpMethod.Post, "/goform/goform_set_cmd_process", data);
+        ResultResponse? json = JsonSerializer.Deserialize<ResultResponse>(await response.Content.ReadAsStringAsync());
         if (json?.result != "success")
+        {
             throw new Exception("Error sending SMS.");
+        }
+
         await AwaitConfirmationAsync(4);
-        var messages = await GetAllSmsAsync();
-        foreach (var msg in messages)
+        List<Message> messages = await GetAllSmsAsync();
+        foreach (Message msg in messages)
         {
             if (msg.Tag == MessageTag.Sent &&
                 msg.number == number &&
@@ -279,11 +307,15 @@ public class Modem
 
     private static string EncodeMessage(string message)
     {
-        if (string.IsNullOrEmpty(message)) return string.Empty;
-        var sb = new StringBuilder();
-        foreach (var codepoint in message.EnumerateRunes())
+        if (string.IsNullOrEmpty(message))
         {
-            var hex = codepoint.Value.ToString("X");
+            return string.Empty;
+        }
+
+        StringBuilder sb = new();
+        foreach (Rune codepoint in message.EnumerateRunes())
+        {
+            string hex = codepoint.Value.ToString("X");
             sb.Append(hex.PadLeft(4, '0'));
         }
         return sb.ToString();

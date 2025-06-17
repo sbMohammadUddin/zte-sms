@@ -33,7 +33,7 @@ public class Message
     public string sms_class { get; set; } = string.Empty;
 
     [JsonIgnore]
-    public MessageTag Tag => Enum.TryParse<MessageTag>(tag, out var value)
+    public MessageTag Tag => Enum.TryParse<MessageTag>(tag, out MessageTag value)
         ? value
         : throw new InvalidOperationException($"Unknown tag: {tag}");
 }
